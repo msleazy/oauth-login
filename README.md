@@ -1,59 +1,291 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# OAuth 2.0 con Laravel Socialite — Discord & Spotify
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> **Asignatura:** Seguridad en Aplicaciones Web · 2026  
+> **Autor:** Morales Ramírez Mariano
 
-## About Laravel
+Implementación práctica del flujo **Authorization Code de OAuth 2.0** en Laravel 12 utilizando Laravel Socialite con dos proveedores externos: **Discord** y **Spotify**.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Descripción
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Esta aplicación permite a los usuarios autenticarse mediante sus cuentas de Discord o Spotify, sin necesidad de crear credenciales adicionales. Implementa correctamente el protocolo OAuth 2.0 y OpenID Connect mediante el paquete Laravel Socialite junto con los providers de la comunidad `socialiteproviders/discord` y `socialiteproviders/spotify`.
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Requisitos
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- PHP 8.2+
+- Laravel 12
+- Composer
+- MariaDB / MySQL
+- Cuenta de desarrollador en [Discord Developer Portal](https://discord.com/developers/applications)
+- Cuenta de desarrollador en [Spotify for Developers](https://developer.spotify.com/dashboard)
 
-## Laravel Sponsors
+---
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Instalación
 
-### Premium Partners
+### 1. Clonar el repositorio e instalar dependencias
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+git clone <url-del-repositorio>
+cd <nombre-del-proyecto>
+composer install
+```
 
-## Contributing
+### 2. Instalar los providers de Socialite
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+composer require laravel/socialite
+composer require socialiteproviders/discord
+composer require socialiteproviders/spotify
+```
 
-## Code of Conduct
+### 3. Configurar la base de datos
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Crear la base de datos y el usuario en MariaDB:
 
-## Security Vulnerabilities
+```sql
+CREATE DATABASE oauth_login;
+CREATE USER 'laraveluser'@'localhost' IDENTIFIED BY 'password123';
+GRANT ALL PRIVILEGES ON oauth_login.* TO 'laraveluser'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 4. Configurar las variables de entorno
 
-## License
+Copiar el archivo de ejemplo y editarlo:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Añadir las siguientes variables al archivo `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=oauth_login
+DB_USERNAME=laraveluser
+DB_PASSWORD=password123
+
+DISCORD_CLIENT_ID=tu_discord_client_id
+DISCORD_CLIENT_SECRET=tu_discord_client_secret
+DISCORD_REDIRECT_URI=http://localhost:8000/auth/discord/callback
+
+SPOTIFY_CLIENT_ID=tu_spotify_client_id
+SPOTIFY_CLIENT_SECRET=tu_spotify_client_secret
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8000/auth/spotify/callback
+```
+
+### 5. Configurar los servicios en `config/services.php`
+
+```php
+'discord' => [
+    'client_id'     => env('DISCORD_CLIENT_ID'),
+    'client_secret' => env('DISCORD_CLIENT_SECRET'),
+    'redirect'      => env('DISCORD_REDIRECT_URI'),
+],
+
+'spotify' => [
+    'client_id'     => env('SPOTIFY_CLIENT_ID'),
+    'client_secret' => env('SPOTIFY_CLIENT_SECRET'),
+    'redirect'      => env('SPOTIFY_REDIRECT_URI'),
+],
+```
+
+### 6. Ejecutar las migraciones
+
+```bash
+php artisan migrate
+```
+
+La migración crea la tabla `users` con los campos necesarios para autenticación social:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | bigint | Clave primaria |
+| `name` | string | Nombre del usuario |
+| `email` | string (nullable, unique) | Correo electrónico |
+| `provider` | string | `discord` o `spotify` |
+| `provider_id` | string | ID del usuario en el proveedor |
+| `avatar` | string (nullable) | URL del avatar |
+| `timestamps` | — | `created_at` / `updated_at` |
+
+### 7. Iniciar el servidor
+
+```bash
+php artisan serve
+```
+
+---
+
+## Configuración de los Portales de Desarrolladores
+
+### Discord
+
+1. Ir a [Discord Developer Portal](https://discord.com/developers/applications) y crear una nueva aplicación.
+2. En la sección **OAuth2**, copiar el **Client ID** y generar un **Client Secret**.
+3. Registrar el Redirect URI: `http://localhost:8000/auth/discord/callback`
+
+### Spotify
+
+1. Ir a [Spotify for Developers Dashboard](https://developer.spotify.com/dashboard) y crear una nueva app.
+2. Copiar el **Client ID** y el **Client Secret**.
+3. Registrar el Redirect URI: `http://127.0.0.1:8000/auth/spotify/callback`
+
+> **Importante:** El Redirect URI en el portal del proveedor debe coincidir exactamente con el valor definido en `.env`.
+
+---
+
+## Arquitectura del Proyecto
+
+### Registro de Providers — `AppServiceProvider`
+
+Los providers de Socialite se registran escuchando el evento `SocialiteWasCalled`:
+
+```php
+use SocialiteProviders\Manager\SocialiteWasCalled;
+use SocialiteProviders\Discord\DiscordExtendSocialite;
+use SocialiteProviders\Spotify\SpotifyExtendSocialite;
+
+protected $listen = [
+    SocialiteWasCalled::class => [
+        DiscordExtendSocialite::class,
+        SpotifyExtendSocialite::class,
+    ],
+];
+```
+
+### Rutas — `routes/web.php`
+
+```php
+use App\Http\Controllers\Auth\SocialiteController;
+
+Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])
+    ->name('socialite.redirect');
+
+Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])
+    ->name('socialite.callback');
+
+Route::get('/dashboard', function () {
+    return 'Bienvenido, ' . auth()->user()->name;
+})->middleware('auth');
+```
+
+### Controlador — `SocialiteController`
+
+```php
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Laravel\Socialite\Facades\Socialite;
+
+class SocialiteController extends Controller
+{
+    public function redirect(string $provider)
+    {
+        return Socialite::driver($provider)->redirect();
+    }
+
+    public function callback(string $provider)
+    {
+        $socialUser = Socialite::driver($provider)->user();
+
+        $user = User::updateOrCreate(
+            [
+                'provider'    => $provider,
+                'provider_id' => $socialUser->getId(),
+            ],
+            [
+                'name'   => $socialUser->getName() ?? $socialUser->getNickname(),
+                'email'  => $socialUser->getEmail(),
+                'avatar' => $socialUser->getAvatar(),
+            ]
+        );
+
+        Auth::login($user, remember: true);
+
+        return redirect('/dashboard');
+    }
+}
+```
+
+### Modelo User — campos `$fillable`
+
+```php
+protected $fillable = [
+    'name', 'email', 'provider', 'provider_id', 'avatar',
+];
+```
+
+---
+
+## Flujo OAuth 2.0 (Authorization Code)
+
+```
+Usuario → /auth/{provider}/redirect
+        → Proveedor (Discord / Spotify): pantalla de consentimiento
+        → /auth/{provider}/callback?code=...
+        → Laravel intercambia code por access_token
+        → Obtiene datos del usuario con el token
+        → updateOrCreate en base de datos
+        → Auth::login($user)
+        → /dashboard
+```
+
+---
+
+## Permisos Solicitados (Scopes)
+
+### Discord
+- Nombre de usuario y avatar
+- Correo electrónico
+- Cartel de perfil
+
+### Spotify
+- Nombre y nombre de usuario
+- Imagen de perfil
+- Seguidores y listas públicas
+
+---
+
+## Desafíos Técnicos Resueltos
+
+| Problema | Solución |
+|---|---|
+| Tabla `sessions` faltante | Ejecutar `php artisan session:table && php artisan migrate` |
+| Redirect URI no coincide | Sincronizar exactamente el URI entre `.env` y el portal del proveedor |
+| Namespace incorrecto del controlador | Usar `App\Http\Controllers\Auth\SocialiteController` |
+
+---
+
+## Uso
+
+1. Acceder a `http://localhost:8000`
+2. Hacer clic en **"Iniciar sesión con Discord"** o **"Iniciar sesión con Spotify"**
+3. Autorizar los permisos en la pantalla del proveedor
+4. Ser redirigido al dashboard con el mensaje de bienvenida
+
+---
+
+## Tecnologías Utilizadas
+
+- [Laravel 12](https://laravel.com/)
+- [Laravel Socialite](https://laravel.com/docs/socialite)
+- [socialiteproviders/discord](https://socialiteproviders.com/Discord/)
+- [socialiteproviders/spotify](https://socialiteproviders.com/Spotify/)
+- MariaDB
+- OAuth 2.0 — Authorization Code Flow
+
+---
+
+## Licencia
+
+Proyecto académico — Seguridad en Aplicaciones Web · 2026
